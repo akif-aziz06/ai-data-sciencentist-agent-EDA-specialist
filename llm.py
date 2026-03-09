@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from agent import load_dataset
 
 load_dotenv(dotenv_path=".evv")
 
@@ -17,11 +18,11 @@ prompt = ChatPromptTemplate.from_messages([
 chain = prompt | llm | StrOutputParser()
 
 
-dummy_metadata = "Columns: ['Total_Bill' (float), 'Tip' (float), 'Day_of_Week' (category)]"
+metadata = load_dataset()
 
 print("Asking GPT-4o-mini for graph advice...")
 print("-" * 20)
 
-response = chain.invoke({"dataset_info": dummy_metadata})
+response = chain.invoke({"dataset_info": metadata})
 
 print(response)
