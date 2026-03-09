@@ -1,9 +1,10 @@
 import os
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI 
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from agent import load_dataset
+from tool import show_head, data_engineering, correlation_analysis, detect_outliers, visualize_data
 
 load_dotenv(dotenv_path=".evv")
 
@@ -43,11 +44,40 @@ Base all recommendations strictly on the provided metadata. Do not invent or ass
 chain = prompt | llm | StrOutputParser()
 
 
-metadata = load_dataset()
+# ── Step 1: Load dataset (metadata string + raw DataFrame)
+metadata, df = load_dataset()
 
-print("Asking GPT-4o-mini for graph advice...")
-print("-" * 20)
+# ── Step 2: Preview the dataset
+print("\n" + "=" * 50)
+print("STEP 1 — Dataset Preview")
+print("=" * 50)
+show_head(df)
 
+# ── Step 3: Data Engineering — clean nulls + detailed EDA
+print("\n" + "=" * 50)
+print("STEP 2 — Data Engineering & EDA")
+print("=" * 50)
+df = data_engineering(df)
+
+# ── Step 4: Correlation Analysis
+print("\n" + "=" * 50)
+print("STEP 3 — Correlation Analysis")
+print("=" * 50)
+correlation_analysis(df)
+
+# ── Step 5: Outlier Detection
+print("\n" + "=" * 50)
+print("STEP 4 — Outlier Detection")
+print("=" * 50)
+detect_outliers(df)
+
+# ── Step 6: Ask LLM for plot recommendations
+print("\n" + "=" * 50)
+print("STEP 5 — Asking GPT-4o-mini for Plot Advice...")
+print("=" * 50)
 response = chain.invoke({"dataset_info": metadata})
-
 print(response)
+
+# ── Step 7: Visualize (manual — use after reading LLM suggestions above)
+# Example: visualize_data(df, "scatter plot", ["total_bill", "tip"], hue="sex")
+# Uncomment and adjust columns/plot type based on LLM output above

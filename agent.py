@@ -22,8 +22,11 @@ def load_dataset():
         f"--- df.info() ---\n{df_info}\n"
         f"--- df.head() ---\n{df_head}"
     )
-    return full_metadata
+
+    # Return both metadata string AND the DataFrame
+    return full_metadata, df
 
 print("Here is what we will send to the LLM:")
 print("-" * 20)
-print(load_dataset())
+metadata, _ = load_dataset()
+print(metadata)
