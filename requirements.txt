@@ -1,0 +1,11 @@
+streamlit
+matplotlib
+seaborn
+pandas
+numpy
+langchain
+langchain-openai
+langchain-core
+langchain-community
+python-dotenv
+openpyxl
