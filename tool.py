@@ -271,3 +271,187 @@ def detect_outliers(df: pd.DataFrame, show_plots: bool = True) -> pd.DataFrame:
 
     summary_df = pd.DataFrame(summary)
     return summary_df
+
+
+# ============================================================
+# TOOL 6 — DATASET STATISTICS
+# Comprehensive stats about the dataset
+# ============================================================
+
+def dataset_stats(df: pd.DataFrame):
+    """
+    Print a comprehensive statistical overview of the dataset.
+    Covers shape, data types, numeric stats, categorical stats,
+    memory usage, and unique value counts per column.
+    """
+    print("\n" + "=" * 60)
+    print("📊 DATASET STATISTICS REPORT")
+    print("=" * 60)
+
+    # Shape
+    print(f"\n📐 Shape       : {df.shape[0]:,} rows  ×  {df.shape[1]} columns")
+
+    # Memory usage
+    mem_bytes = df.memory_usage(deep=True).sum()
+    mem_kb = mem_bytes / 1024
+    print(f"💾 Memory Usage: {mem_kb:.2f} KB ({mem_bytes:,} bytes)")
+
+    # Data types summary
+    dtype_counts = df.dtypes.value_counts()
+    print(f"\n🔠 Data Types Breakdown:")
+    for dtype, count in dtype_counts.items():
+        print(f"   {str(dtype):<15} → {count} column(s)")
+
+    # Per-column overview table
+    print(f"\n📋 Column Overview:")
+    print(f"  {'Column':<20} {'Dtype':<12} {'Non-Null':<10} {'Nulls':<8} {'Unique':<8}")
+    print("  " + "-" * 62)
+    for col in df.columns:
+        non_null = df[col].notna().sum()
+        nulls    = df[col].isna().sum()
+        unique   = df[col].nunique()
+        dtype    = str(df[col].dtype)
+        print(f"  {col:<20} {dtype:<12} {non_null:<10} {nulls:<8} {unique:<8}")
+
+    # Numeric statistics
+    numeric_df = df.select_dtypes(include="number")
+    if not numeric_df.empty:
+        print(f"\n🔢 Numeric Column Statistics:")
+        stats = numeric_df.describe().T
+        stats["skewness"] = numeric_df.skew()
+        stats["kurtosis"] = numeric_df.kurt()
+        print(stats.to_string())
+
+    # Categorical statistics
+    cat_cols = df.select_dtypes(include=["object", "category"]).columns
+    if len(cat_cols) > 0:
+        print(f"\n🔤 Categorical Column Statistics:")
+        print(f"  {'Column':<20} {'Unique Values':<15} {'Top Value':<20} {'Top Freq'}")
+        print("  " + "-" * 65)
+        for col in cat_cols:
+            unique_count = df[col].nunique()
+            top_val      = df[col].value_counts().idxmax() if not df[col].dropna().empty else "N/A"
+            top_freq     = df[col].value_counts().max()    if not df[col].dropna().empty else 0
+            print(f"  {col:<20} {unique_count:<15} {str(top_val):<20} {top_freq}")
+
+    # Duplicate rows
+    dupes = df.duplicated().sum()
+    print(f"\n🔁 Duplicate Rows: {dupes} ({(dupes / len(df) * 100):.2f}%)" if len(df) > 0 else "")
+
+    print("\n" + "=" * 60)
+
+
+# ============================================================
+# TOOL 7 — MISSING VALUE HANDLER
+# Identifies, explains strategy, and handles missing values
+# ============================================================
+
+def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Detect missing values column by column, explain the handling
+    strategy chosen for each, apply it, and show a before/after summary.
+
+    Strategy logic:
+    - Numeric   → if skewed (|skew| > 0.5): fill with MEDIAN
+                  else: fill with MEAN
+    - Categorical / Object / Bool → fill with MODE (most frequent value)
+    - Datetime  → fill with FORWARD FILL (ffill)
+    - If >50% of rows are null → DROP the column entirely
+
+    Returns the cleaned DataFrame.
+    """
+    print("\n" + "=" * 60)
+    print("🧹 MISSING VALUE HANDLER")
+    print("=" * 60)
+
+    null_counts = df.isnull().sum()
+    missing_cols = null_counts[null_counts > 0]
+
+    if missing_cols.empty:
+        print("\n✅ No missing values detected! Dataset is already clean.")
+        print("=" * 60)
+        return df
+
+    total_rows = len(df)
+    print(f"\n🔍 Found {len(missing_cols)} column(s) with missing values:\n")
+
+    before_summary = []
+    actions_taken  = []
+
+    for col in missing_cols.index:
+        null_count = missing_cols[col]
+        null_pct   = (null_count / total_rows) * 100
+        dtype      = df[col].dtype
+
+        before_summary.append({
+            "Column":   col,
+            "Dtype":    str(dtype),
+            "Nulls":    null_count,
+            "Null %":   f"{null_pct:.1f}%"
+        })
+
+        print(f"  📌 Column : '{col}'")
+        print(f"     Dtype  : {dtype}")
+        print(f"     Missing: {null_count} / {total_rows} rows  ({null_pct:.1f}%)")
+
+        # ── Strategy Decision ──────────────────────────────────
+        if null_pct > 50:
+            strategy = "DROP COLUMN"
+            reason   = f"{null_pct:.1f}% missing — too much data lost to fill reliably"
+            df.drop(columns=[col], inplace=True)
+
+        elif pd.api.types.is_datetime64_any_dtype(dtype):
+            strategy = "FORWARD FILL (ffill)"
+            reason   = "Datetime — forward fill preserves time-series continuity"
+            df[col].ffill(inplace=True)
+            df[col].bfill(inplace=True)  # catch leading NaTs
+
+        elif pd.api.types.is_numeric_dtype(dtype):
+            skewness = df[col].skew()
+            if abs(skewness) > 0.5:
+                fill_val = df[col].median()
+                strategy = f"MEDIAN  ({fill_val:.4f})"
+                reason   = f"Skewness = {skewness:.2f} — median is robust to skewed/outlier-heavy data"
+            else:
+                fill_val = df[col].mean()
+                strategy = f"MEAN    ({fill_val:.4f})"
+                reason   = f"Skewness = {skewness:.2f} — data is roughly symmetric, mean is appropriate"
+            df[col].fillna(fill_val, inplace=True)
+
+        else:
+            # Categorical / object / bool
+            fill_val = df[col].mode()[0] if not df[col].dropna().empty else "Unknown"
+            strategy = f"MODE    ('{fill_val}')"
+            reason   = "Categorical — mode (most frequent value) is the safest imputation"
+            df[col].fillna(fill_val, inplace=True)
+
+        print(f"     Strategy: {strategy}")
+        print(f"     Why     : {reason}\n")
+
+        actions_taken.append({
+            "Column":   col,
+            "Strategy": strategy,
+            "Reason":   reason
+        })
+
+    # ── Before / After Summary Table ──────────────────────────
+    print("-" * 60)
+    print("📊 BEFORE / AFTER SUMMARY")
+    print("-" * 60)
+    print(f"  {'Column':<20} {'Before (Nulls)':<15} {'After (Nulls)'}")
+    print("  " + "-" * 45)
+    for item in before_summary:
+        col = item["Column"]
+        before_nulls = item["Nulls"]
+        if col in df.columns:
+            after_nulls = df[col].isnull().sum()
+            status = "✅ Clean" if after_nulls == 0 else f"⚠️  {after_nulls} remain"
+        else:
+            status = "🗑️  Dropped"
+        print(f"  {col:<20} {str(before_nulls):<15} {status}")
+
+    remaining = df.isnull().sum().sum()
+    print(f"\n{'✅ All missing values handled!' if remaining == 0 else f'⚠️  {remaining} missing values still remain.'}")
+    print("=" * 60)
+
+    return df
