@@ -1,5 +1,6 @@
 import os
 import json
+import matplotlib.pyplot as plt
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -57,95 +58,109 @@ chain = prompt | llm | StrOutputParser()
 
 
 # ══════════════════════════════════════════════════════════════
-#                    PERFECT EDA PIPELINE
+#                  CLI — PERFECT EDA PIPELINE
 # ══════════════════════════════════════════════════════════════
 
-# ── Step 1: Load dataset (metadata string + raw DataFrame)
-metadata, df = load_dataset()
+if __name__ == "__main__":
 
-# ── Step 2: Preview the dataset
-print("\n" + "=" * 50)
-print("STEP 1 — Dataset Preview")
-print("=" * 50)
-show_head(df)
+    # ── Step 1: Load dataset
+    metadata, df = load_dataset()
 
-# ── Step 3: Dataset Statistics
-print("\n" + "=" * 50)
-print("STEP 2 — Dataset Statistics")
-print("=" * 50)
-dataset_stats(df)
-
-# ── Step 4: Missing Value Handler (smart strategy: skew-based median/mean, mode, ffill, or drop)
-print("\n" + "=" * 50)
-print("STEP 3 — Missing Value Handler")
-print("=" * 50)
-df = handle_missing_values(df)
-
-# ── Step 5: Data Engineering — detailed EDA on clean data
-print("\n" + "=" * 50)
-print("STEP 4 — Data Engineering & EDA")
-print("=" * 50)
-df = data_engineering(df)
-
-# ── Step 6: Outlier Detection on clean data
-print("\n" + "=" * 50)
-print("STEP 5 — Outlier Detection")
-print("=" * 50)
-detect_outliers(df)
-
-# ── Step 7: Correlation Analysis on clean data
-print("\n" + "=" * 50)
-print("STEP 6 — Correlation Analysis")
-print("=" * 50)
-correlation_analysis(df)
-
-# ── Step 8: Ask LLM for structured plot recommendations (JSON)
-print("\n" + "=" * 50)
-print("STEP 7 — Asking GPT-4o-mini for Plot Advice...")
-print("=" * 50)
-response = chain.invoke({"dataset_info": metadata})
-print(response)
-
-# ── Step 9: Auto-Visualize — parse LLM JSON and generate all recommended plots
-print("\n" + "=" * 50)
-print("STEP 8 — Auto-Generating Recommended Visualizations")
-print("=" * 50)
-
-try:
-    recommendations = json.loads(response)
-
-    for category in ["univariate", "bivariate", "multivariate"]:
-        plots = recommendations.get(category, [])
-        if not plots:
-            print(f"⚠️  No {category} plots recommended.")
-            continue
-
-        print(f"\n📊 Generating {category.upper()} plots ({len(plots)} recommended)...\n")
-
-        for i, plot in enumerate(plots, 1):
-            plot_type = plot.get("plot_type", "histogram")
-            columns = plot.get("columns", [])
-            hue = plot.get("hue")
-            reason = plot.get("reason", "")
-
-            # Convert null string to None
-            if hue == "null" or hue == "None":
-                hue = None
-
-            print(f"  🎨 [{category.title()} #{i}] {plot_type.title()} — Columns: {columns}" +
-                  (f" — Hue: {hue}" if hue else ""))
-            print(f"     Reason: {reason}")
-
-            visualize_data(df, plot_type, columns, hue=hue)
-
+    # ── Step 2: Preview
     print("\n" + "=" * 50)
-    print("✅ All visualizations generated successfully!")
+    print("STEP 1 — Dataset Preview")
+    print("=" * 50)
+    head_df, info = show_head(df)
+    print(head_df.to_string())
+    print(info)
+
+    # ── Step 3: Dataset Statistics
+    print("\n" + "=" * 50)
+    print("STEP 2 — Dataset Statistics")
+    print("=" * 50)
+    report = dataset_stats(df)
+    print(report)
+
+    # ── Step 4: Missing Value Handler
+    print("\n" + "=" * 50)
+    print("STEP 3 — Missing Value Handler")
+    print("=" * 50)
+    df, report = handle_missing_values(df)
+    print(report)
+
+    # ── Step 5: Data Engineering
+    print("\n" + "=" * 50)
+    print("STEP 4 — Data Engineering & EDA")
+    print("=" * 50)
+    df, report = data_engineering(df)
+    print(report)
+
+    # ── Step 6: Outlier Detection
+    print("\n" + "=" * 50)
+    print("STEP 5 — Outlier Detection")
+    print("=" * 50)
+    fig, summary_df, report = detect_outliers(df)
+    print(report)
+    if fig:
+        plt.show()
+
+    # ── Step 7: Correlation Analysis
+    print("\n" + "=" * 50)
+    print("STEP 6 — Correlation Analysis")
+    print("=" * 50)
+    fig, top_pairs, report = correlation_analysis(df)
+    print(report)
+    if fig:
+        plt.show()
+
+    # ── Step 8: LLM plot recommendations (JSON)
+    print("\n" + "=" * 50)
+    print("STEP 7 — Asking GPT-4o-mini for Plot Advice...")
+    print("=" * 50)
+    response = chain.invoke({"dataset_info": metadata})
+    print(response)
+
+    # ── Step 9: Auto-Visualize
+    print("\n" + "=" * 50)
+    print("STEP 8 — Auto-Generating Recommended Visualizations")
     print("=" * 50)
 
-except json.JSONDecodeError as e:
-    print(f"\n❌ Failed to parse LLM response as JSON: {e}")
-    print("Raw response was:")
-    print(response)
-    print("\nTip: Re-run the script — the LLM occasionally adds extra text around the JSON.")
-except Exception as e:
-    print(f"\n❌ Error during auto-visualization: {e}")
+    try:
+        recommendations = json.loads(response)
+
+        for category in ["univariate", "bivariate", "multivariate"]:
+            plots = recommendations.get(category, [])
+            if not plots:
+                print(f"⚠️  No {category} plots recommended.")
+                continue
+
+            print(f"\n📊 Generating {category.upper()} plots ({len(plots)} recommended)...\n")
+
+            for i, plot in enumerate(plots, 1):
+                plot_type = plot.get("plot_type", "histogram")
+                columns = plot.get("columns", [])
+                hue = plot.get("hue")
+                reason = plot.get("reason", "")
+
+                if hue == "null" or hue == "None":
+                    hue = None
+
+                print(f"  🎨 [{category.title()} #{i}] {plot_type.title()} — Columns: {columns}" +
+                      (f" — Hue: {hue}" if hue else ""))
+                print(f"     Reason: {reason}")
+
+                fig, msg = visualize_data(df, plot_type, columns, hue=hue)
+                print(f"     {msg}")
+                if fig:
+                    plt.show()
+
+        print("\n" + "=" * 50)
+        print("✅ All visualizations generated successfully!")
+        print("=" * 50)
+
+    except json.JSONDecodeError as e:
+        print(f"\n❌ Failed to parse LLM response as JSON: {e}")
+        print("Raw response was:")
+        print(response)
+    except Exception as e:
+        print(f"\n❌ Error during auto-visualization: {e}")
